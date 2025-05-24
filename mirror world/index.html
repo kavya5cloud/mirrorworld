@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Mirror World</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+
+  <style>
+    * { cursor: none !important; }
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: black;
+      color: white;
+      font-family: 'Press Start 2P', cursive;
+    }
+    h1 {
+      text-align: center;
+      margin-top: 30px;
+      position: relative;
+      z-index: 2; /* ensure it's above canvas */
+    }
+    #tagline {
+      font-family: 'Press Start 2P', monospace;
+      color: #0ff;  /* changed to bright cyan */
+      font-size: 0.9rem;
+      text-align: center;
+      margin-top: 10px;
+      letter-spacing: 1.5px;
+      text-shadow: 0 0 5px #0ff;
+    }
+    #matrixBG {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 0;
+      pointer-events: none;
+      image-rendering: pixelated;
+    }
+    #mirrored-cursor {
+      position: fixed;
+      width: 15px;
+      height: 15px;
+      background: cyan;
+      border: 2px solid white;
+      border-radius: 50%;
+      pointer-events: none;
+      mix-blend-mode: difference;
+      z-index: 9999;
+    }
+    #controls { 
+      display: flex; 
+      flex-direction: row;
+      justify-content: center; 
+      align-items: center; 
+      position: fixed;
+      bottom: 20px; 
+      left: 50%; 
+      transform: translateX(-50%); 
+      background: rgba(0,0,0,0.8); 
+      padding: 10px;
+      border: 2px solid cyan;
+      gap: 15px;
+      z-index: 1001;
+    }
+    #controls select, #controls input, #controls button {
+      font-family: monospace;
+      color: #0ff;
+      font-size: 0.9rem;
+      background: #222;
+      border: 2px solid cyan;
+      padding: 5px;
+    }
+    #minigameBtn {
+      position: fixed;
+      bottom: 90px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #222;
+      border: 2px solid cyan;
+      color: #0ff;
+      padding: 10px 20px;
+      font-family: monospace;
+      font-size: 1rem;
+      z-index: 1001;
+    }
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      background: rgba(0,0,0,0.95);
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    .modal.show {
+      display: flex;
+    }
+    .modal button {
+      margin: 10px;
+      padding: 10px 20px;
+      background: #444;
+      border: 2px solid cyan;
+      color: #0ff;
+      font-family: monospace;
+      font-size: 1rem;
+    }
+    .game-container {
+      display: none;
+      margin-top: 20px;
+    }
+    #drawingCanvas {
+      background: white;
+      image-rendering: pixelated;
+      border: 4px solid white;
+    }
+    #memoryGame {
+      display: grid;
+      grid-template-columns: repeat(4, 60px);
+      gap: 10px;
+      justify-content: center;
+    }
+    .memory-tile {
+      width: 60px;
+      height: 60px;
+      background: #333;
+      color: transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid cyan;
+      font-size: 1.5rem;
+      user-select: none;
+      position: relative;
+      cursor: default;
+      transition: background 0.3s, color 0.3s;
+    }
+    .memory-tile.revealed {
+      color: #0ff;
+      background: #000;
+    }
+    .memory-tile .question-mark {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      font-family: 'Press Start 2P', monospace;
+      font-size: 1.5rem;
+      color: cyan;
+      image-rendering: pixelated;
+      user-select: none;
+      pointer-events: none;
+      transition: opacity 0.3s;
+    }
+    .memory-tile.revealed .question-mark {
+      display: none;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="matrixBG"></canvas>
+
+  <h1>Welcome to the Mirror World</h1>
+  <p id="tagline">Where reality flips... and your reflexes break</p>
+  
+  <div id="mirrored-cursor"></div>
+  <div id="controls">
+    <select id="axisSelector">
+      <option value="horizontal">Mirror X</option>
+      <option value="vertical">Mirror Y</option>
+    </select>
+    <input type="color" id="cursorColor" value="#00ffff" />
+    <button id="toggleCursorBtn">Toggle Cursor</button>
+  </div>
+  <button id="minigameBtn">Minigames</button>
+
+  <div id="minigameModal" class="modal">
+    <button onclick="showGame('drawing')">🎨 Drawing Pad</button>
+    <button onclick="showGame('typing')">🔠 Typing Challenge</button>
+    <button onclick="showGame('memory')">🧠 Memory Game</button>
+    <button onclick="closeModal()">❌ Close</button>
+
+    <div id="drawing" class="game-container">
+      <canvas id="drawingCanvas" width="400" height="400"></canvas><br/>
+      <button onclick="clearCanvas()">Clear</button>
+    </div>
+    <div id="typing" class="game-container">
+      <p>Type backward:</p>
+      <h2 id="wordToType"></h2>
+      <input id="reverseInput" oninput="checkReverseTyping()" />
+      <p id="typingStatus"></p>
+    </div>
+    <div id="memory" class="game-container">
+      <div id="memoryGame"></div>
+    </div>
+  </div>
+
+  <script>
+    const cursor = document.getElementById('mirrored-cursor');
+    const axisSelect = document.getElementById('axisSelector');
+    const colorInput = document.getElementById('cursorColor');
+    let cursorActive = true;
+
+    document.addEventListener('mousemove', e => {
+      let x = e.clientX, y = e.clientY;
+      if (axisSelect.value === 'horizontal') x = window.innerWidth - x;
+      if (axisSelect.value === 'vertical') y = window.innerHeight - y;
+      if (cursorActive) {
+        cursor.style.left = x + 'px';
+        cursor.style.top = y + 'px';
+      }
+    });
+
+    colorInput.addEventListener('input', e => cursor.style.background = e.target.value);
+
+    document.getElementById('toggleCursorBtn').onclick = () => {
+      cursorActive = !cursorActive;
+      cursor.style.display = cursorActive ? 'block' : 'none';
+    };
+
+    const modal = document.getElementById('minigameModal');
+    document.getElementById('minigameBtn').onclick = () => modal.classList.add('show');
+    function closeModal() {
+      modal.classList.remove('show');
+      document.querySelectorAll('.game-container').forEach(c => c.style.display = 'none');
+    }
+    function showGame(id) {
+      document.querySelectorAll('.game-container').forEach(c => c.style.display = 'none');
+      document.getElementById(id).style.display = 'block';
+      if (id === 'typing') generateNewWord();
+      if (id === 'memory') setupMemoryGame();
+    }
+
+    // Drawing Pad
+    const canvas = document.getElementById('drawingCanvas'), ctx = canvas.getContext('2d');
+    ctx.fillStyle = 'black';
+    let drawing = false;
+    canvas.onmousedown = () => drawing = true;
+    canvas.onmouseup = () => drawing = false;
+    canvas.onmouseout = () => drawing = false;
+    canvas.onmousemove = e => {
+      if (!drawing) return;
+      const r = canvas.getBoundingClientRect();
+      let x = e.clientX - r.left, y = e.clientY - r.top;
+      if (axisSelect.value === 'horizontal') x = r.width - x;
+      if (axisSelect.value === 'vertical') y = r.height - y;
+      ctx.fillRect(x, y, 4, 4);
+    };
+    function clearCanvas() { ctx.clearRect(0, 0, canvas.width, canvas.height); }
+
+    // Typing Challenge
+    const words = ['mirror', 'world', 'reverse', 'chaos', 'glitch'];
+    function generateNewWord() {
+      const w = words[Math.floor(Math.random() * words.length)];
+      document.getElementById('wordToType').innerText = w;
+      document.getElementById('reverseInput').value = '';
+      document.getElementById('typingStatus').innerText = '';
+    }
+    function checkReverseTyping() {
+      const o = document.getElementById('wordToType').innerText;
+      const i = document.getElementById('reverseInput').value;
+      document.getElementById('typingStatus').innerText = i === o.split('').reverse().join('') ? '✅ Correct!' : '❌ Try again';
+    }
+
+    // Memory Game
+    const memoryContainer = document.getElementById('memoryGame');
+    const icons = ['🌟', '🔥', '💧', '🌙', '⚡', '🍀', '🎲', '🎵'];
+    let memoryTiles = [];
+    let revealedTiles = [];
+    let lockBoard = false;
+
+    function setupMemoryGame() {
+      lockBoard = false;
+      revealedTiles = [];
+      memoryContainer.innerHTML = '';
+      const pairs = icons.concat(icons);
+      pairs.sort(() => Math.random() - 0.5);
+
+      memoryTiles = [];
+      for (let i = 0; i < pairs.length; i++) {
+        const tile = document.createElement('div');
+        tile.classList.add('memory-tile');
+        tile.dataset.icon = pairs[i];
+
+        const emojiSpan = document.createElement('span');
+        emojiSpan.className = 'emoji';
+        emojiSpan.textContent = pairs[i];
+        tile.appendChild(emojiSpan);
+
+        const qmark = document.createElement('span');
+        qmark.className = 'question-mark';
+        qmark.textContent = '?';
+        tile.appendChild(qmark);
+
+        memoryContainer.appendChild(tile);
+        memoryTiles.push(tile);
+      }
+    }
+
+    document.body.addEventListener('click', () => {
+      if (lockBoard) return;
+      if (!modal.classList.contains('show') || document.getElementById('memory').style.display !== 'block') return;
+
+      const cursorX = parseInt(cursor.style.left);
+      const cursorY = parseInt(cursor.style.top);
+
+      const tile = memoryTiles.find(t => {
+        const r = t.getBoundingClientRect();
+        return cursorX >= r.left && cursorX <= r.right && cursorY >= r.top && cursorY <= r.bottom;
+      });
+      if (!tile || tile.classList.contains('revealed')) return;
+
+      tile.classList.add('revealed');
+      revealedTiles.push(tile);
+
+      if (revealedTiles.length === 2) {
+        lockBoard = true;
+        const [first, second] = revealedTiles;
+        if (first.dataset.icon === second.dataset.icon) {
+          revealedTiles = [];
+          lockBoard = false;
+          if (memoryTiles.every(t => t.classList.contains('revealed'))) {
+            setTimeout(() => alert('You won!'), 200);
+          }
+        } else {
+          setTimeout(() => {
+            first.classList.remove('revealed');
+            second.classList.remove('revealed');
+            revealedTiles = [];
+            lockBoard = false;
+          }, 1000);
+        }
+      }
+    });
+
+    // LED Matrix Flicker Background
+    const canvasBG = document.getElementById('matrixBG');
+    const ctxBG = canvasBG.getContext('2d');
+    let cols, rows, cellSize = 10;
+    let flickerGrid = [];
+
+    function resizeFlickerMatrix() {
+      canvasBG.width = window.innerWidth;
+      canvasBG.height = window.innerHeight;
+      cols = Math.floor(canvasBG.width / cellSize);
+      rows = Math.floor(canvasBG.height / cellSize);
+      flickerGrid = Array.from({ length: rows }, () =>
+        Array.from({ length: cols }, () => getRandomChar())
+      );
+    }
+    window.addEventListener('resize', resizeFlickerMatrix);
+    resizeFlickerMatrix();
+
+    function getRandomChar() {
+      const chars = ['░','▒','▓','█',' ',' ',' ',' ',' ',' '];
+      return chars[Math.floor(Math.random() * chars.length)];
+    }
+
+    function drawFlickerMatrix() {
+      ctxBG.clearRect(0, 0, canvasBG.width, canvasBG.height);
+      ctxBG.fillStyle = 'rgba(10, 10, 10, 0.3)'; // very dark near black color
+      ctxBG.font = `${cellSize}px monospace`;
+      ctxBG.shadowColor = 'rgba(10, 10, 10, 0.4)';
+      ctxBG.shadowBlur = 1;
+
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          if (Math.random() < 0.05) flickerGrid[y][x] = getRandomChar();
+          ctxBG.fillStyle = `rgba(20,20,20,${Math.random() * 0.7 + 0.3})`;
+          ctxBG.fillText(flickerGrid[y][x], x * cellSize, (y + 1) * cellSize);
+        }
+      }
+    }
+    function flickerLoop() {
+      drawFlickerMatrix();
+      requestAnimationFrame(flickerLoop);
+    }
+    flickerLoop();
+  </script>
+</body>
+</html>
